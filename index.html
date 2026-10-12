@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIOLOGI TOPIKAL RECAP - Tingkatan 4 KSSM</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- MediaPipe Hands & Camera Utils CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+        }
+
+        /* Mirror video for natural web-cam hand movement */
+        #webcam, #output_canvas {
+            transform: scaleX(-1);
+        }
+
+        .gift-box {
+            transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.25s ease;
+        }
+
+        .gift-box.hovered {
+            transform: scale(1.06);
+        }
+
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .glass-box {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Pulse animation for timer warning */
+        @keyframes pulse-red {
+            0%, 100% { color: #ef4444; transform: scale(1); }
+            50% { color: #f87171; transform: scale(1.05); }
+        }
+        .timer-warning {
+            animation: pulse-red 1s infinite;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-hidden flex flex-col justify-between relative">
+
+    <!-- Webcam Feed & Track Overlay (Background) -->
+    <div class="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <video id="webcam" class="absolute w-full h-full object-cover opacity-30" playsinline></video>
+        <canvas id="output_canvas" class="absolute w-full h-full object-cover z-10"></canvas>
+    </div>
+
+    <!-- Virtual Hand Cursor (Finger Tip Indicator) -->
+    <div id="virtual-cursor" class="fixed z-50 pointer-events-none hidden transition-all duration-75 ease-out" style="top: -100px; left: -100px;">
+        <div class="relative flex items-center justify-center">
+            <!-- Outer SVG Dwell Ring -->
+            <svg class="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                <path class="text-slate-700/60" stroke-width="4" stroke="currentColor" fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path id="dwell-progress-path" class="text-emerald-400 stroke-current" stroke-width="4" stroke-linecap="round" fill="none"
+                      stroke-dasharray="0, 100"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            </svg>
+            <!-- Center Pointer Icon -->
+            <div class="absolute w-6 h-6 bg-emerald-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-ping"></div>
+            <div class="absolute w-5 h-5 bg-emerald-400 rounded-full border-2 border-white shadow-md flex items-center justify-center">
+                <i class="fa-solid fa-hand-pointer text-[10px] text-slate-900"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Layout Header -->
+    <header class="relative z-20 w-full p-3 sm:p-4 glass-panel border-b border-slate-800/80 flex items-center justify-between shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-xl shadow-lg shadow-emerald-500/20">
+                <i class="fa-solid fa-dna text-xl text-slate-950"></i>
+            </div>
+            <div>
+                <h1 class="text-lg sm:text-xl font-extrabold tracking-wide bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+                    BIOLOGI TOPIKAL RECAP
+                </h1>
+                <p class="text-xs text-slate-400 font-semibold hidden sm:block">KSSM Tingkatan 4 • Edisi Semakan Interactive</p>
+            </div>
+        </div>
+
+        <!-- Timer & Stats Display -->
+        <div class="flex items-center gap-3 sm:gap-6">
+            <!-- Question Tracker -->
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Soalan</span>
+                <span id="question-count" class="text-base sm:text-lg font-extrabold text-cyan-400">1 / 50</span>
+            </div>
+
+            <!-- Score Badge -->
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Skor</span>
+                <span id="score-display" class="text-base sm:text-lg font-extrabold text-amber-400">0</span>
+            </div>
+
+            <!-- Timer Badge -->
+            <div class="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 flex items-center gap-2 shadow-inner">
+                <i class="fa-solid fa-stopwatch text-emerald-400 text-sm" id="timer-icon"></i>
+                <span id="time-display" class="text-lg font-extrabold font-mono text-emerald-400">07:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Interactive Arena -->
+    <main class="relative z-20 flex-1 w-full max-w-7xl mx-auto p-4 flex flex-col justify-between items-center my-auto">
+
+        <!-- Corner Box A: Top-Left -->
+        <div id="box-A" data-box-index="0" class="gift-box absolute top-2 left-2 sm:top-6 sm:left-6 w-44 sm:w-64 glass-box rounded-2xl p-3 sm:p-4 cursor-pointer hover:border-emerald-400 shadow-xl transition-all">
+            <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400 text-base shrink-0 shadow-sm">
+                    A
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1 text-slate-400 text-xs font-semibold">
+                        <i class="fa-solid fa-gift text-emerald-400"></i>
+                        <span>Kotak Misteri A</span>
+                    </div>
+                    <p id="option-A-text" class="text-xs sm:text-sm text-slate-200 font-medium leading-snug break-words">Jawapan A...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corner Box B: Top-Right -->
+        <div id="box-B" data-box-index="1" class="gift-box absolute top-2 right-2 sm:top-6 sm:right-6 w-44 sm:w-64 glass-box rounded-2xl p-3 sm:p-4 cursor-pointer hover:border-cyan-400 shadow-xl transition-all">
+            <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center font-bold text-cyan-400 text-base shrink-0 shadow-sm">
+                    B
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1 text-slate-400 text-xs font-semibold">
+                        <i class="fa-solid fa-gift text-cyan-400"></i>
+                        <span>Kotak Misteri B</span>
+                    </div>
+                    <p id="option-B-text" class="text-xs sm:text-sm text-slate-200 font-medium leading-snug break-words">Jawapan B...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Question Display Card -->
+        <div class="w-full max-w-2xl mx-auto my-auto my-16 sm:my-20 glass-panel rounded-3xl p-5 sm:p-8 text-center border border-slate-700/60 shadow-2xl relative overflow-hidden">
+            <!-- Topic Badge -->
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-semibold text-emerald-400 mb-3 shadow-inner">
+                <i class="fa-solid fa-book-open"></i>
+                <span id="topic-badge">Bab 2: Struktur Sel</span>
+            </div>
+
+            <!-- Question Text -->
+            <h2 id="question-text" class="text-base sm:text-xl md:text-2xl font-bold text-slate-100 leading-relaxed mb-4">
+                Memuatkan soalan...
+            </h2>
+
+            <!-- Feedback Message Banner -->
+            <div id="feedback-banner" class="opacity-0 transition-opacity duration-300 min-h-[2.5rem] flex items-center justify-center">
+                <span id="feedback-text" class="px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-md"></span>
+            </div>
+        </div>
+
+        <!-- Corner Box C: Bottom-Left -->
+        <div id="box-C" data-box-index="2" class="gift-box absolute bottom-2 left-2 sm:bottom-6 sm:left-6 w-44 sm:w-64 glass-box rounded-2xl p-3 sm:p-4 cursor-pointer hover:border-amber-400 shadow-xl transition-all">
+            <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-amber-400 text-base shrink-0 shadow-sm">
+                    C
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1 text-slate-400 text-xs font-semibold">
+                        <i class="fa-solid fa-gift text-amber-400"></i>
+                        <span>Kotak Misteri C</span>
+                    </div>
+                    <p id="option-C-text" class="text-xs sm:text-sm text-slate-200 font-medium leading-snug break-words">Jawapan C...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corner Box D: Bottom-Right -->
+        <div id="box-D" data-box-index="3" class="gift-box absolute bottom-2 right-2 sm:bottom-6 sm:right-6 w-44 sm:w-64 glass-box rounded-2xl p-3 sm:p-4 cursor-pointer hover:border-purple-400 shadow-xl transition-all">
+            <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center font-bold text-purple-400 text-base shrink-0 shadow-sm">
+                    D
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1 text-slate-400 text-xs font-semibold">
+                        <i class="fa-solid fa-gift text-purple-400"></i>
+                        <span>Kotak Misteri D</span>
+                    </div>
+                    <p id="option-D-text" class="text-xs sm:text-sm text-slate-200 font-medium leading-snug break-words">Jawapan D...</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Welcome & Camera Setup Modal Overlay -->
+    <div id="start-modal" class="fixed inset-0 z-50 glass-panel bg-slate-950/90 flex items-center justify-center p-4">
+        <div class="max-w-xl w-full bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+            <div class="w-20 h-20 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                <i class="fa-solid fa-hand-pointer text-4xl text-slate-950"></i>
+            </div>
+            
+            <div class="space-y-2">
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-100">BIOLOGI TOPIKAL RECAP</h2>
+                <p class="text-sm text-slate-400">Subjek Biologi Tingkatan 4 KSSM • 50 Soalan Cabaran</p>
+            </div>
+
+            <!-- Instruction Box -->
+            <div class="bg-slate-800/60 rounded-2xl p-4 text-left space-y-3 text-xs sm:text-sm text-slate-300 border border-slate-700">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-camera text-emerald-400 text-lg mt-0.5"></i>
+                    <p><strong class="text-emerald-400">Kawalan Gestur Jari:</strong> Gunakan jari telunjuk anda di hadapan kamera. Gerakkan kursor ke atas kotak pilihan jawapan dan tahan selama **1 saat** untuk memilih.</p>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-mouse-pointer text-cyan-400 text-lg mt-0.5"></i>
+                    <p><strong class="text-cyan-400">Tetikus (Fallback):</strong> Anda juga boleh mengklik kotak jawapan secara terus dengan tetikus sekiranya webcam tidak dinyalakan.</p>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-clock text-amber-400 text-lg mt-0.5"></i>
+                    <p><strong class="text-amber-400">Masa Kuiz:</strong> 7 Minit (420 Saat) untuk melengkapkan sebanyak mungkin soalan dengan markah bonus masa.</p>
+                </div>
+            </div>
+
+            <!-- Camera Status Indicator -->
+            <div id="cam-status" class="text-xs font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <span>Sediakan kamera webcam anda...</span>
+            </div>
+
+            <!-- Start Action Button -->
+            <button id="start-btn" onclick="startGame()" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-base sm:text-lg shadow-xl shadow-emerald-500/20 transform transition hover:scale-[1.02] active:scale-95">
+                MULA KUIZ SEKARANG <i class="fa-solid fa-play ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- High Score & Game Over Modal -->
+    <div id="game-over-modal" class="fixed inset-0 z-50 glass-panel bg-slate-950/95 flex items-center justify-center p-4 hidden">
+        <div class="max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+            <div class="w-20 h-20 bg-gradient-to-tr from-amber-400 to-yellow-500 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-trophy text-4xl text-slate-950"></i>
+            </div>
+
+            <div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-100 mb-1">KEPUTUSAN KUIZ BIOLOGI</h2>
+                <p class="text-xs sm:text-sm text-slate-400">Pencapaian Ulangkaji Biologi Tingkatan 4 KSSM</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+                    <span class="text-[10px] text-slate-400 font-bold block uppercase">Jumlah Skor</span>
+                    <span id="res-score" class="text-lg sm:text-xl font-extrabold text-amber-400">0</span>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+                    <span class="text-[10px] text-slate-400 font-bold block uppercase">Betul / Salah</span>
+                    <span id="res-accuracy" class="text-lg sm:text-xl font-extrabold text-emerald-400">0 / 0</span>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+                    <span class="text-[10px] text-slate-400 font-bold block uppercase">Peratusan</span>
+                    <span id="res-percentage" class="text-lg sm:text-xl font-extrabold text-cyan-400">0%</span>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
+                    <span class="text-[10px] text-slate-400 font-bold block uppercase">Gred</span>
+                    <span id="res-grade" class="text-lg sm:text-xl font-extrabold text-purple-400">-</span>
+                </div>
+            </div>
+
+            <!-- Grade Message Banner -->
+            <div id="res-message" class="bg-slate-800/50 p-4 rounded-2xl text-xs sm:text-sm text-slate-300 border border-slate-700 italic">
+                "Tahniah atas usaha gigih anda!"
+            </div>
+
+            <!-- Restart Button -->
+            <button onclick="resetGame()" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-base sm:text-lg shadow-xl shadow-emerald-500/20 transform transition hover:scale-[1.02] active:scale-95">
+                MAIN SEMULA <i class="fa-solid fa-rotate-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. WEB AUDIO API SYNTHESIZER (NO EXTERNAL AUDIO FILES)
+           ========================================================================== */
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playHover() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playCorrect() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // Arpeggio C-E-G-C
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+                    gain.gain.setValueAtTime(0.15, now + idx * 0.07);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.07);
+                    osc.stop(now + idx * 0.07 + 0.2);
+                });
+            }
+
+            playWrong() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+
+            playGiftOpen() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.25);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+
+            playClick() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+        }
+
+        const sound = new SoundFX();
+
+        /* ==========================================================================
+           2. COMPLETE 50 BIOLOGY FORM 4 KSSM QUESTION BANK (MALAY)
+           ========================================================================== */
+        const biologyQuestions = [
+            {
+                topic: "Bab 2: Cell Biology & Organisation",
+                question: "Organel manakah yang bertindak sebagai tapak penjanaan tenaga melalui respirasi sel?",
+                options: ["Mitosondria", "Jalinan Endoplasma", "Jasad Golgi", "Kloroplas"],
+                answer: 0
+            },
+            {
+                topic: "Bab 2: Cell Biology & Organisation",
+                question: "Apakah komponen utama sel tumbuhan yang memberikan bentuk tetap dan sokongan mekanikal?",
+                options: ["Membran Plasma", "Dinding Sel", "Vakuol Pusat", "Sitoplasma"],
+                answer: 1
+            },
+            {
+                topic: "Bab 2: Cell Biology & Organisation",
+                question: "Organel manakah yang mensintesis protein dalam sel?",
+                options: ["Lysosom", "Ribosom", "Sentriol", "Peroksisom"],
+                answer: 1
+            },
+            {
+                topic: "Bab 2: Cell Biology & Organisation",
+                question: "Apakah fungsi utama Lizosom dalam sel haiwan?",
+                options: ["Mensintesis lipid", "Mengandungi enzim pencernaan organel rosak", "Menjana ATP", "Mengawal pembahagian sel"],
+                answer: 1
+            },
+            {
+                topic: "Bab 3: Movement of Substances Across Plasma Membrane",
+                question: "Resapan air merentasi membran telap memilih dari kepekatan keupayaan air tinggi ke rendah dipanggil?",
+                options: ["Resapan Berbantu", "Pengangkutan Aktif", "Osmosis", "Dialisis"],
+                answer: 2
+            },
+            {
+                topic: "Bab 3: Movement of Substances Across Plasma Membrane",
+                question: "Pengangkutan aktif memerlukan tenaga dalam bentuk ATP kerana molekul bergerak...",
+                options: ["Menurunkan kecerunan kepekatan", "Menentang kecerunan kepekatan", "Secara rawak", "Tanpa protein pembawa"],
+                answer: 1
+            },
+            {
+                topic: "Bab 3: Movement of Substances Across Plasma Membrane",
+                question: "Apakah yang berlaku kepada sel darah merah apabila direndam dalam larutan hipertonik?",
+                options: ["Hemolisis", "Segar / Turgid", "Krenasi", "Plasmolisis"],
+                answer: 2
+            },
+            {
+                topic: "Bab 3: Movement of Substances Across Plasma Membrane",
+                question: "Proses penguncupan membran plasma dari dinding sel tumbuhan akibat kehilangan air dipanggil?",
+                options: ["Deplasmolisis", "Plasmolisis", "Segar", "Hemolisis"],
+                answer: 1
+            },
+            {
+                topic: "Bab 4: Chemical Compositions in Cells",
+                question: "Manakah antara berikut merupakan karbohidrat jenis monomer (monosakarida)?",
+                options: ["Sukrosa", "Maltosa", "Glukosa", "Selulosa"],
+                answer: 2
+            },
+            {
+                topic: "Bab 4: Chemical Compositions in Cells",
+                question: "Glikogen ialah bentuk simpanan karbohidrat dalam...",
+                options: ["Tumbuhan sahaja", "Haiwan dan Kulat", "Bakteria sahaja", "Kloroplas"],
+                answer: 1
+            },
+            {
+                topic: "Bab 4: Chemical Compositions in Cells",
+                question: "Apakah ikatan kimia yang menghubungkan asid amino untuk membentuk polipeptida?",
+                options: ["Ikatan Peptida", "Ikatan Glikosida", "Ikatan Ester", "Ikatan Hidrogen"],
+                answer: 0
+            },
+            {
+                topic: "Bab 4: Chemical Compositions in Cells",
+                question: "Lemak tepu mempunyai ciri berikut KECUALI...",
+                options: ["Mempunyai ikatan ganda dua pada asid lemak", "Bentuk pepejal pada suhu bilik", "Berasal dari sumber haiwan", "Kandungan kolesterol tinggi"],
+                answer: 0
+            },
+            {
+                topic: "Bab 5: Metabolism and Enzymes",
+                question: "Apakah hipotesis yang menerangkan mekanisme tindakan enzim dan substrat secara khusus?",
+                options: ["Hipotesis Mangga dan Kunci", "Hipotesis Induksi", "Hipotesis Dwikutub", "Hipotesis Resapan"],
+                answer: 0
+            },
+            {
+                topic: "Bab 5: Metabolism and Enzymes",
+                question: "Apakah yang berlaku kepada enzim pada suhu melebihi suhu optimum (cth: 60°C)?",
+                options: ["Menjadi lebih aktif", "Ternyahasiat", "Membeku", "Menukar substrat"],
+                answer: 1
+            },
+            {
+                topic: "Bab 5: Metabolism and Enzymes",
+                question: "Enzim pepsain berfungsi paling optimum pada julat pH...",
+                options: ["pH 1.5 - 2.0 (Asid)", "pH 7.0 (Neutral)", "pH 8.5 (Alkali)", "pH 12.0"],
+                answer: 0
+            },
+            {
+                topic: "Bab 5: Metabolism and Enzymes",
+                question: "Enzim Tripsain dirembeskan di dalam...",
+                options: ["Perut", "Usus Kecil (Duodenum)", "Mulut", "Esofagus"],
+                answer: 1
+            },
+            {
+                topic: "Bab 6: Cell Division",
+                question: "Peringkat Mitosis di mana kromosom tersusun di satah khatulistiwa sel ialah...",
+                options: ["Profasa", "Metafasa", "Anafasa", "Telofasa"],
+                answer: 1
+            },
+            {
+                topic: "Bab 6: Cell Division",
+                question: "Pindah silang (crossing over) antara kromatid bukan kembara berlaku semasa...",
+                options: ["Profasa I Meiosis", "Profasa II Meiosis", "Metafasa Mitosis", "Anaphase I"],
+                answer: 0
+            },
+            {
+                topic: "Bab 6: Cell Division",
+                question: "Apakah kepentingan Meiosis kepada organisma seksual?",
+                options: ["Mengeluarkan sel soma", "Mengekalkan bilangan kromosom diploid", "Menghasilkan variasi genetik dan gamet haploid", "Membaiki tisu rosak"],
+                answer: 2
+            },
+            {
+                topic: "Bab 6: Cell Division",
+                question: "Pembahagian sitoplasma pada akhir telofasa dipanggil...",
+                options: ["Kariokinesis", "Sitokinesis", "Sinapsis", "Meiosis"],
+                answer: 1
+            },
+            {
+                topic: "Bab 7: Cellular Respiration",
+                question: "Glikolisis ialah proses penguraian glukosa kepada pyruvat yang berlaku di...",
+                options: ["Mitosondria", "Sitoplasma", "Nukleus", "Jasad Golgi"],
+                answer: 1
+            },
+            {
+                topic: "Bab 7: Cellular Respiration",
+                question: "Apakah hasil sampingan respirasi aerob dalam sel manusia?",
+                options: ["Karbon dioksida dan air", "Asid laktik", "Etanol dan karbon dioksida", "Asid urik"],
+                answer: 0
+            },
+            {
+                topic: "Bab 7: Cellular Respiration",
+                question: "Pengumpulan bahan manakah dalam otot menyebabkan kelesuan dan kram semasa aktiviti cergas?",
+                options: ["Asid Laktik", "Etanol", "Asid Piruvat", "Asid Asetik"],
+                answer: 0
+            },
+            {
+                topic: "Bab 7: Cellular Respiration",
+                question: "Fermentasi oleh yis digunakan dalam pembuatan roti menghasilkan gas...",
+                options: ["Oksigen", "Karbon Dioksida", "Nitrogen", "Hidrogen"],
+                answer: 1
+            },
+            {
+                topic: "Bab 8: Gaseous Exchange in Humans and Animals",
+                question: "Struktur respirasi ikan yang mempunyai luas permukaan besar dan padat dengan kapilari darah ialah...",
+                options: ["Trakeol", "Insang (Filamen/Lamella)", "Alveolus", "Kulit Lembap"],
+                answer: 1
+            },
+            {
+                topic: "Bab 8: Gaseous Exchange in Humans and Animals",
+                question: "Bagaimanakah gas Oksigen diangkut terutamanya dalam sistem peredaran darah manusia?",
+                options: ["Sebagai ion bikarbonat", "Terlarut dalam plasma", "Sebagai Oksihemoglobin dalam sel darah merah", "Carbaminohemoglobin"],
+                answer: 2
+            },
+            {
+                topic: "Bab 8: Gaseous Exchange in Humans and Animals",
+                question: "Apakah penyesuaian Alveolus untuk pertukaran gas berkesan?",
+                options: ["Dinding tebal dan kering", "Dinding setebal satu sel dan lembap", "Tiada jalinan kapilari darah", "Permukaan licin tanpa lipatan"],
+                answer: 1
+            },
+            {
+                topic: "Bab 9: Nutrition and Human Digestive System",
+                question: "Pergerakan gelombang pengecutan dan pengenduran otot dinding saluran pencernaan dipanggil...",
+                options: ["Asimilasi", "Peristalsis", "Penyerapan", "Emulsi"],
+                answer: 1
+            },
+            {
+                topic: "Bab 9: Nutrition and Human Digestive System",
+                question: "Hati menghasilkan jus hempedu yang disimpan di dalam pundi hempedu untuk...",
+                options: ["Mencernakan protein", "Mengemulsikan lemak", "Menukarkan kanji ke maltosa", "Membunuh bakteria sahaja"],
+                answer: 1
+            },
+            {
+                topic: "Bab 9: Nutrition and Human Digestive System",
+                question: "Penyerapan asid lemak dan gliserol berlaku ke dalam... di dalam vilus.",
+                options: ["Kapilari darah", "Lakteal", "Salur vena", "Arterioli"],
+                answer: 1
+            },
+            {
+                topic: "Bab 9: Nutrition and Human Digestive System",
+                question: "Organ manakah yang bertanggungjawab terutamanya untuk penyerapan semula air dan garam mineral?",
+                options: ["Usus Besar (Kolon)", "Duodenum", "Perut", "Esofagus"],
+                answer: 0
+            },
+            {
+                topic: "Bab 10: Transport in Humans and Animals",
+                question: "Injap manakah yang menghalang aliran balik darah dari ventrikel kiri ke atrium kiri?",
+                options: ["Injap Trikuspid", "Injap Bikuspid (Mitral)", "Injap Sabit", "Injap Aorta"],
+                answer: 1
+            },
+            {
+                topic: "Bab 10: Transport in Humans and Animals",
+                question: "Pencetus denyutan jantung (pacemaker semula jadi) yang terletak di dinding atrium kanan ialah...",
+                options: ["Nodus Sinoatrium (Nodus SA)", "Nodus Atrioventrikel (Nodus AV)", "Gantian His", "Gentian Purkinje"],
+                answer: 0
+            },
+            {
+                topic: "Bab 10: Transport in Humans and Animals",
+                question: "Apakah komponen darah yang memainkan peranan utama dalam pembekuan darah?",
+                options: ["Eritrosit", "Leukosit", "Platlet (Trombosit)", "Plasma Blood"],
+                answer: 2
+            },
+            {
+                topic: "Bab 10: Transport in Humans and Animals",
+                question: "Cecair interstitial yang meresap masuk ke dalam salur limfa dipanggil...",
+                options: ["Plasma", "Limfa", "Serum", "Hormon"],
+                answer: 1
+            },
+            {
+                topic: "Bab 11: Immunity in Humans",
+                question: "Apakah jenis keimunan yang diperolehi oleh bayi melalui susu ibu (kolostrum)?",
+                options: ["Keimunan Pasif Semula Jadi", "Keimunan Aktif Semula Jadi", "Keimunan Pasif Buatan", "Keimunan Aktif Buatan"],
+                answer: 0
+            },
+            {
+                topic: "Bab 11: Immunity in Humans",
+                question: "Suntikan vaksin mengandungi patogen yang dilemahkan untuk merangsang...",
+                options: ["Keimunan Aktif Buatan", "Keimunan Pasif Buatan", "Keimunan Pasif Semula Jadi", "Antibodi segera"],
+                answer: 0
+            },
+            {
+                topic: "Bab 12: Coordination and Response in Humans",
+                question: "Pusat kawalan tindakan terkawal seperti pemikiran, ingatan dan intelek ialah...",
+                options: ["Serebrum", "Serebelum", "Medula Oblongata", "Hipotalamus"],
+                answer: 0
+            },
+            {
+                topic: "Bab 12: Coordination and Response in Humans",
+                question: "Bahagian otak yang mengawal keseimbangan badan dan koordinasi otot ialah...",
+                options: ["Serebelum", "Serebrum", "Talamus", "Hipotalamus"],
+                answer: 0
+            },
+            {
+                topic: "Bab 12: Coordination and Response in Humans",
+                question: "Penghantaran impuls saraf merentasi sinaps berlaku melalui bahan kimia yang dipanggil...",
+                options: ["Hormon", "Neurotransmiter", "Enzim", "Antibodi"],
+                answer: 1
+            },
+            {
+                topic: "Bab 13: Homeostasis and Human Urinary System",
+                question: "Hormon Antidiuretik (ADH) dirembeskan untuk merangsang penyerapan semula air di...",
+                options: ["Tiub berliku distal dan tiub pengumpul nefron", "Kapsul Bowman", "Glomerulus", "Hati"],
+                answer: 0
+            },
+            {
+                topic: "Bab 13: Homeostasis and Human Urinary System",
+                question: "Apakah yang berlaku kepada kapilari darah di kulit semasa persekitaran sejuk?",
+                options: ["Peluasan salur darah (Vasodilasi)", "Penyempitan salur darah (Vasokonstriksi)", "Mengeluarkan banyak peluh", "Bulut roma menurun"],
+                answer: 1
+            },
+            {
+                topic: "Bab 13: Homeostasis and Human Urinary System",
+                question: "Hormon insulin yang dirembeskan oleh pankreas berfungsi untuk...",
+                options: ["Menurunkan aras glukosa darah", "Meningkatkan aras glukosa darah", "Meningkatkan kadar denyutan jantung", "Merangsang pertumbuhan"],
+                answer: 0
+            },
+            {
+                topic: "Bab 14: Support and Movement in Humans and Animals",
+                question: "Tulang-tulang yang membentuk rangka paksi manusia termasuk...",
+                options: ["Tengkorak, Turus Vertebra, Sangkar Rusuk", "Lengan dan Kaki", "Pektoral dan Pelvis", "Femur dan Humerus"],
+                answer: 0
+            },
+            {
+                topic: "Bab 14: Support and Movement in Humans and Animals",
+                question: "Tisu penghubung liat yang menghubungkan TULANG kepada TULANG dipanggil...",
+                options: ["Ligamen", "Tendon", "Rawan", "Otot Rangka"],
+                answer: 0
+            },
+            {
+                topic: "Bab 14: Support and Movement in Humans and Animals",
+                question: "Otot biseps dan triseps bertindak secara berpasangan dan berlawanan dipanggil otot...",
+                options: ["Antagonistik", "Sinergis", "Kardiak", "Licit"],
+                answer: 0
+            },
+            {
+                topic: "Bab 15: Sexual Reproduction, Development and Growth",
+                question: "Proses pembebasan oosit sekunder dari ovari ke tiub Falopio dipanggil...",
+                options: ["Pengovulan (Ovulasi)", "Haid", "Penempelan", "Persenyawaan"],
+                answer: 0
+            },
+            {
+                topic: "Bab 15: Sexual Reproduction, Development and Growth",
+                question: "Hormon manakah yang mengekalkan ketebalan dinding endometrium semasa kehamilan?",
+                options: ["Progesteron", "FSH", "LH", "Oksitosin"],
+                answer: 0
+            },
+            {
+                topic: "Bab 15: Sexual Reproduction, Development and Growth",
+                question: "Persenyawaan antara sperma dan oosit sekunder biasanya berlaku di...",
+                options: ["Tiub Falopio (Tiub Uterus)", "Uterus", "Serviks", "Ovari"],
+                answer: 0
+            },
+            {
+                topic: "Bab 15: Sexual Reproduction, Development and Growth",
+                question: "Perkembangan embrio yang menempel pada dinding uterus membentuk organ pertukaran bahan dinamakan...",
+                options: ["Plasenta", "Amnion", "Kord Umbilikus", "Klorion"],
+                answer: 0
+            }
+        ];
+
+        /* ==========================================================================
+           3. GAME STATE VARIABLES
+           ========================================================================== */
+        let currentQIndex = 0;
+        let score = 0;
+        let correctAnswers = 0;
+        let totalQuestions = biologyQuestions.length;
+        let timerSeconds = 420; // 7 minutes
+        let timerInterval = null;
+        let isGameRunning = false;
+
+        // Dwell tracking
+        let hoveredBoxIndex = null;
+        let hoverStartTime = null;
+        const DWELL_TIME_MS = 1000; // 1 second dwell duration
+
+        // MediaPipe & Webcam refs
+        let videoElement = document.getElementById('webcam');
+        let canvasElement = document.getElementById('output_canvas');
+        let canvasCtx = canvasElement.getContext('2d');
+        let virtualCursor = document.getElementById('virtual-cursor');
+        let dwellProgressPath = document.getElementById('dwell-progress-path');
+
+        // Box Elements
+        const boxElements = [
+            document.getElementById('box-A'),
+            document.getElementById('box-B'),
+            document.getElementById('box-C'),
+            document.getElementById('box-D')
+        ];
+
+        /* ==========================================================================
+           4. MEDIAPIPE HANDS SETUP & DRAWING
+           ========================================================================== */
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onHandResults);
+
+        let camera = null;
+
+        function initCamera() {
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    if (isGameRunning || document.getElementById('start-modal').classList.contains('flex')) {
+                        await hands.send({ image: videoElement });
+                    }
+                },
+                width: 1280,
+                height: 720
+            });
+            camera.start().then(() => {
+                document.getElementById('cam-status').innerHTML = `
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <span class="text-emerald-400">Kamera Sedia! Sila Tekan Butang Mula.</span>
+                `;
+            }).catch(err => {
+                console.warn("Camera access denied or missing:", err);
+                document.getElementById('cam-status').innerHTML = `
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <span class="text-amber-400">Kamera tidak dapat dikesan. Mod Tetikus Aktif!</span>
+                `;
+            });
+        }
+
+        function onHandResults(results) {
+            // Resize canvas
+            canvasElement.width = videoElement.videoWidth || window.innerWidth;
+            canvasElement.height = videoElement.videoHeight || window.innerHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Draw subtle skeleton lines if drawing utils are loaded
+                if (typeof drawConnectors === 'function' && typeof HAND_CONNECTIONS !== 'undefined') {
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: 'rgba(16, 185, 129, 0.4)', lineWidth: 3 });
+                }
+                if (typeof drawLandmarks === 'function') {
+                    drawLandmarks(canvasCtx, landmarks, { color: 'rgba(56, 189, 248, 0.6)', lineWidth: 1, radius: 4 });
+                }
+
+                // Index finger tip (Landmark 8)
+                const indexTip = landmarks[8];
+                
+                // Flip X because video is mirrored
+                const screenX = (1 - indexTip.x) * window.innerWidth;
+                const screenY = indexTip.y * window.innerHeight;
+
+                updateVirtualCursor(screenX, screenY);
+                checkCursorHover(screenX, screenY);
+
+            } else {
+                hideVirtualCursor();
+                resetDwell();
+            }
+            canvasCtx.restore();
+        }
+
+        function updateVirtualCursor(x, y) {
+            virtualCursor.classList.remove('hidden');
+            virtualCursor.style.left = `${x - 32}px`;
+            virtualCursor.style.top = `${y - 32}px`;
+        }
+
+        function hideVirtualCursor() {
+            virtualCursor.classList.add('hidden');
+        }
+
+        /* ==========================================================================
+           5. DWELL SELECTION & HOVER LOGIC
+           ========================================================================== */
+        function checkCursorHover(x, y) {
+            let foundBoxIndex = null;
+
+            boxElements.forEach((box, idx) => {
+                const rect = box.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    foundBoxIndex = idx;
+                }
+            });
+
+            if (foundBoxIndex !== null) {
+                if (hoveredBoxIndex !== foundBoxIndex) {
+                    // New Box Hovered
+                    hoveredBoxIndex = foundBoxIndex;
+                    hoverStartTime = performance.now();
+                    sound.playHover();
+                    highlightBox(foundBoxIndex);
+                } else {
+                    // Continue hovering same box
+                    const elapsed = performance.now() - hoverStartTime;
+                    const progressPercent = Math.min((elapsed / DWELL_TIME_MS) * 100, 100);
+                    
+                    // Update Circular SVG Ring
+                    dwellProgressPath.setAttribute('stroke-dasharray', `${progressPercent}, 100`);
+
+                    if (elapsed >= DWELL_TIME_MS) {
+                        // Dwell Completed -> Select Answer
+                        selectAnswer(hoveredBoxIndex);
+                        resetDwell();
+                    }
+                }
+            } else {
+                resetDwell();
+            }
+        }
+
+        function resetDwell() {
+            hoveredBoxIndex = null;
+            hoverStartTime = null;
+            dwellProgressPath.setAttribute('stroke-dasharray', `0, 100`);
+            boxElements.forEach(box => box.classList.remove('hovered', 'border-emerald-400', 'border-cyan-400', 'border-amber-400', 'border-purple-400'));
+        }
+
+        function highlightBox(index) {
+            boxElements.forEach((box, idx) => {
+                if (idx === index) {
+                    box.classList.add('hovered');
+                    if (idx === 0) box.classList.add('border-emerald-400');
+                    if (idx === 1) box.classList.add('border-cyan-400');
+                    if (idx === 2) box.classList.add('border-amber-400');
+                    if (idx === 3) box.classList.add('border-purple-400');
+                } else {
+                    box.classList.remove('hovered');
+                }
+            });
+        }
+
+        /* ==========================================================================
+           6. GAMEPLAY ENGINE & TIMER
+           ========================================================================== */
+        function startGame() {
+            sound.init();
+            sound.playClick();
+            
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('start-modal').classList.remove('flex');
+
+            currentQIndex = 0;
+            score = 0;
+            correctAnswers = 0;
+            timerSeconds = 420;
+            isGameRunning = true;
+
+            updateScoreUI();
+            loadQuestion();
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (!isGameRunning) return;
+                timerSeconds--;
+
+                const mins = Math.floor(timerSeconds / 60);
+                const secs = timerSeconds % 60;
+                const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                
+                const timeDisp = document.getElementById('time-display');
+                timeDisp.textContent = formatted;
+
+                if (timerSeconds <= 60) {
+                    timeDisp.classList.add('timer-warning');
+                }
+
+                if (timerSeconds <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function loadQuestion() {
+            if (currentQIndex >= totalQuestions) {
+                endGame();
+                return;
+            }
+
+            const q = biologyQuestions[currentQIndex];
+            document.getElementById('question-count').textContent = `${currentQIndex + 1} / ${totalQuestions}`;
+            document.getElementById('topic-badge').textContent = q.topic;
+            document.getElementById('question-text').textContent = q.question;
+
+            document.getElementById('option-A-text').textContent = q.options[0];
+            document.getElementById('option-B-text').textContent = q.options[1];
+            document.getElementById('option-C-text').textContent = q.options[2];
+            document.getElementById('option-D-text').textContent = q.options[3];
+
+            // Reset Box Styles
+            boxElements.forEach(box => {
+                box.className = "gift-box absolute w-44 sm:w-64 glass-box rounded-2xl p-3 sm:p-4 cursor-pointer shadow-xl transition-all";
+            });
+
+            // Set Position Classes
+            boxElements[0].classList.add('top-2', 'left-2', 'sm:top-6', 'sm:left-6');
+            boxElements[1].classList.add('top-2', 'right-2', 'sm:top-6', 'sm:right-6');
+            boxElements[2].classList.add('bottom-2', 'left-2', 'sm:bottom-6', 'sm:left-6');
+            boxElements[3].classList.add('bottom-2', 'right-2', 'sm:bottom-6', 'sm:right-6');
+
+            // Hide feedback
+            const fb = document.getElementById('feedback-banner');
+            fb.classList.add('opacity-0');
+        }
+
+        function selectAnswer(selectedIndex) {
+            if (!isGameRunning) return;
+
+            const q = biologyQuestions[currentQIndex];
+            const isCorrect = selectedIndex === q.answer;
+
+            const feedbackBanner = document.getElementById('feedback-banner');
+            const feedbackText = document.getElementById('feedback-text');
+
+            if (isCorrect) {
+                sound.playCorrect();
+                sound.playGiftOpen();
+                correctAnswers++;
+                
+                // Calculate Speed Bonus (Max 100 base + remaining time factor)
+                const speedBonus = Math.floor(timerSeconds / 10);
+                const pointsEarned = 100 + speedBonus;
+                score += pointsEarned;
+
+                feedbackText.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-lg";
+                feedbackText.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5"></i> TEPAT! Kotak Terbuka (+${pointsEarned} Mata)`;
+                
+                // Trigger Confetti Burst
+                confetti({
+                    particleCount: 40,
+                    spread: 60,
+                    origin: { y: 0.7 }
+                });
+
+                boxElements[selectedIndex].classList.add('border-2', 'border-emerald-400', 'bg-emerald-950/60');
+            } else {
+                sound.playWrong();
+                feedbackText.className = "px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-lg";
+                feedbackText.innerHTML = `<i class="fa-solid fa-circle-xmark mr-1.5"></i> SALAH! Jawapan Betul: <strong>${q.options[q.answer]}</strong>`;
+                
+                boxElements[selectedIndex].classList.add('border-2', 'border-rose-500', 'bg-rose-950/60');
+                boxElements[q.answer].classList.add('border-2', 'border-emerald-400', 'bg-emerald-950/60');
+            }
+
+            feedbackBanner.classList.remove('opacity-0');
+            updateScoreUI();
+
+            // Freeze interaction briefly before loading next
+            isGameRunning = false;
+            setTimeout(() => {
+                currentQIndex++;
+                isGameRunning = true;
+                loadQuestion();
+            }, 1800);
+        }
+
+        function updateScoreUI() {
+            document.getElementById('score-display').textContent = score;
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            clearInterval(timerInterval);
+
+            sound.playGiftOpen();
+
+            const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+            let grade = "C";
+            let msg = "Teruskan latihan untuk memantapkan pemahaman Biologi anda!";
+
+            if (percentage >= 85) {
+                grade = "A+";
+                msg = "Cemerlang! Anda benar-benar menguasai Biologi Tingkatan 4 KSSM!";
+            } else if (percentage >= 70) {
+                grade = "A";
+                msg = "Syabas! Pencapaian yang sangat baik!";
+            } else if (percentage >= 50) {
+                grade = "B";
+                msg = "Keputusan yang memuaskan. Tingkatkan ulangkaji lagi!";
+            }
+
+            document.getElementById('res-score').textContent = score;
+            document.getElementById('res-accuracy').textContent = `${correctAnswers} / ${totalQuestions}`;
+            document.getElementById('res-percentage').textContent = `${percentage}%`;
+            document.getElementById('res-grade').textContent = grade;
+            document.getElementById('res-message').textContent = `"${msg}"`;
+
+            document.getElementById('game-over-modal').classList.remove('hidden');
+            document.getElementById('game-over-modal').classList.add('flex');
+
+            // Victory Confetti
+            confetti({
+                particleCount: 120,
+                spread: 100,
+                origin: { y: 0.5 }
+            });
+        }
+
+        function resetGame() {
+            sound.playClick();
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.remove('flex');
+            startGame();
+        }
+
+        // Mouse Fallback Click Listener for Quick Testing
+        boxElements.forEach((box, idx) => {
+            box.addEventListener('click', () => {
+                if (isGameRunning) {
+                    selectAnswer(idx);
+                }
+            });
+        });
+
+        // Initialize Camera on Window Load
+        window.onload = () => {
+            initCamera();
+        };
+    </script>
+</body>
+</html>
